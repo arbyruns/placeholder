@@ -1,9 +1,3 @@
-//
-//  tweetmarksApp.swift
-//  tweetmarks
-//
-//  Created by robevans on 8/2/22.
-//
 
 import SimpleKeychain
 import SwiftUI

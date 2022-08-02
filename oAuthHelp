@@ -1,0 +1,68 @@
+import SimpleKeychain
+import SwiftUI
+import Twift
+
+class ClientContainer: ObservableObject {
+  @Published var client: Twift?
+}
+
+@main
+struct tweetmarksApp: App {
+    @StateObject var container = ClientContainer()
+    let simpleKeyChain = SimpleKeychain()
+    let defaults = UserDefaults.standard
+    let encoder = JSONEncoder()
+
+    var body: some Scene {
+        WindowGroup {
+            if let twitterClient = container.client {
+                ContentView()
+                    .environmentObject(twitterClient)
+            } else {
+                Text("Logging In")
+                    .task {
+                        if let savedUser = defaults.object(forKey: ConstantStrings.authKeyChainString) as? Data {
+                            let decoder = JSONDecoder()
+                            if let loadedUser = try? decoder.decode(OAuth2User.self, from: savedUser) {
+
+                                container.client = Twift(oauth2User: loadedUser) { refreshedToken in
+                                    print("refreshedToken: \(refreshedToken)")
+                                }
+
+                                try? await container.client?.refreshOAuth2AccessToken()
+                            }
+
+                        } else {
+                            print("no token found")
+                            let user = try? await Twift.Authentication().authenticateUser(
+                                clientId: TWITTER_clientId,
+                                redirectUri: URL(string: TWITTER_CALL_BACKURL)!,
+                                scope: Set(OAuth2Scope.allCases))
+
+                            if let encoded = try? encoder.encode(user) {
+                                defaults.set(encoded, forKey: ConstantStrings.authKeyChainString)
+                            }
+
+                            if let user = user {
+                                container.client = Twift(oauth2User: user) { refreshedToken in
+                                    print("refreshedToken: \(refreshedToken)")
+                                }
+
+                                try? await container.client?.refreshOAuth2AccessToken()
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+extension Twift {
+  var hasUserAuth: Bool {
+    switch authenticationType {
+    case .appOnly(_): return false
+    case .userAccessTokens(_, _): return true
+    case .oauth2UserAuth(_, _): return true
+    }
+  }
+}
